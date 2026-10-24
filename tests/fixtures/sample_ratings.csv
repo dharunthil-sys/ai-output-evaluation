@@ -1,0 +1,4 @@
+pair_id,modality,a_adherence,a_quality,a_realism,a_issues,b_adherence,b_quality,b_realism,b_issues,preferred,explanation,rated_at
+t1,image,4,4,3,distorted anatomy,2,4,4,missing prompt element,a,"TEST FIXTURE ONLY. A includes the red umbrella the prompt asks for; B omits it entirely, so A wins despite an extra finger on the left hand.",2026-01-01T00:00:00Z
+t2,video,3,2,2,flicker / unnatural motion,3,4,4,,b,"TEST FIXTURE ONLY. Both follow the prompt; A's background flickers between 0:02 and 0:04, B's motion stays smooth throughout.",2026-01-01T00:00:00Z
+t3,image,2,2,2,,4,4,4,,a,short,2026-01-01T00:00:00Z

@@ -1,0 +1,15 @@
+{
+  "instructions": "Generate two outputs for each prompt with free AI tools, save them in pairs/media/ with the file names below, then load this file in tool/evaluate.html. For text pairs, paste each chatbot reply into a and b directly.",
+  "pairs": [
+    {"id": "img-01", "modality": "image", "prompt": "A chemist in a white lab coat pouring blue liquid from a beaker into a conical flask, both hands visible, a whiteboard behind with the formula CuSO4 written on it.", "a": "img-01-a.png", "b": "img-01-b.png"},
+    {"id": "img-02", "modality": "image", "prompt": "A red double-decker bus stopped at a bus stop in the rain, the destination sign reading 'Leatherhead', a person holding a yellow umbrella.", "a": "img-02-a.png", "b": "img-02-b.png"},
+    {"id": "img-03", "modality": "image", "prompt": "A footballer mid-kick on a muddy pitch at dusk, ball in the air, number 10 on the shirt.", "a": "img-03-a.png", "b": "img-03-b.png"},
+    {"id": "img-04", "modality": "image", "prompt": "A shop shelf of perfume bottles with a price label reading '£45', soft daylight, glass reflections.", "a": "img-04-a.png", "b": "img-04-b.png"},
+    {"id": "img-05", "modality": "image", "prompt": "Two people shaking hands across a table, a laptop showing a bar chart between them.", "a": "img-05-a.png", "b": "img-05-b.png"},
+    {"id": "vid-01", "modality": "video", "prompt": "A 5-second clip of a basketball bouncing three times on an outdoor court, then rolling to a stop.", "a": "vid-01-a.mp4", "b": "vid-01-b.mp4"},
+    {"id": "vid-02", "modality": "video", "prompt": "A 5-second clip of someone writing 'Hello' on a whiteboard with a black marker.", "a": "vid-02-a.mp4", "b": "vid-02-b.mp4"},
+    {"id": "txt-01", "modality": "text", "prompt": "Explain to a 15-year-old, in under 100 words, why ice floats on water.", "a": "Paste reply A here", "b": "Paste reply B here"},
+    {"id": "txt-02", "modality": "text", "prompt": "A customer says their train was cancelled and they will miss a job interview. Reply as a helpful station assistant in two or three sentences.", "a": "Paste reply A here", "b": "Paste reply B here"},
+    {"id": "txt-03", "modality": "text", "prompt": "Give three practical tips for keeping a lab notebook, one sentence each.", "a": "Paste reply A here", "b": "Paste reply B here"}
+  ]
+}

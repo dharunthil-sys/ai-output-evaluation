@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Output Evaluator</title>
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --ink:#1d1d1b; --muted:#6b6b66; --line:#dcdcd6; --accent:#2f5d50; --warn:#a33b2b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:16px 20px; border-bottom:1px solid var(--line); background:var(--card); display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  header .meta { color:var(--muted); font-size:13px; }
+  main { max-width:1200px; margin:0 auto; padding:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; }
+  .prompt { font-size:16px; }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width: 800px) { .pair { grid-template-columns:1fr; } }
+  .media { width:100%; min-height:200px; background:#eee; border-radius:6px; display:flex; align-items:center; justify-content:center; overflow:hidden; cursor:zoom-in; }
+  .media img, .media video { max-width:100%; display:block; }
+  .media.zoomed { cursor:zoom-out; overflow:auto; }
+  .media.zoomed img { max-width:none; width:250%; }
+  .media .text-output { padding:12px; white-space:pre-wrap; text-align:left; width:100%; cursor:text; }
+  label { display:block; font-weight:600; margin-top:10px; }
+  .scale { display:flex; gap:6px; margin-top:4px; }
+  .scale button { width:36px; height:32px; border:1px solid var(--line); background:#fff; border-radius:4px; cursor:pointer; }
+  .scale button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .issues { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:4px; font-weight:400; }
+  .issues label { font-weight:400; margin:0; display:flex; gap:4px; align-items:center; }
+  textarea { width:100%; min-height:110px; font:inherit; padding:8px; border:1px solid var(--line); border-radius:6px; }
+  .choice { display:flex; gap:10px; margin-top:6px; flex-wrap:wrap; }
+  .choice button { padding:8px 16px; border:1px solid var(--line); background:#fff; border-radius:6px; cursor:pointer; }
+  .choice button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; }
+  .actions button, .file-btn { padding:9px 16px; border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; font:inherit; }
+  .actions button.secondary { background:#fff; color:var(--accent); }
+  .error { color:var(--warn); font-size:13px; margin-top:6px; min-height:1em; }
+  .counter { font-size:12px; color:var(--muted); text-align:right; }
+  .hint { color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AI Output Evaluator</h1>
+  <span class="meta" id="progress">Load a pairs file to begin</span>
+  <label class="file-btn" style="margin:0">Load pairs.json<input type="file" id="pairsFile" accept=".json" hidden></label>
+  <label class="file-btn" style="margin:0;background:#fff;color:var(--accent)">Media folder<input type="file" id="mediaFiles" multiple hidden></label>
+</header>
+<main>
+  <div class="card hint" id="intro">
+    Load <code>pairs/pairs.json</code>, then select the media files it refers to (images, videos or audio).
+    Click an image to zoom; use the video controls to replay or step through frames.
+    Ratings are saved in this browser as you go and can be exported to CSV at any time.
+  </div>
+  <div id="task" hidden>
+    <div class="card"><div class="hint">Prompt</div><div class="prompt" id="promptText"></div></div>
+    <div class="pair">
+      <div class="card" id="cardA"></div>
+      <div class="card" id="cardB"></div>
+    </div>
+    <div class="card">
+      <label>Which output better follows the prompt overall?</label>
+      <div class="choice" id="pref"></div>
+      <label for="explanation">Explanation (point to what you saw or heard)</label>
+      <textarea id="explanation" placeholder="e.g. A follows the prompt but the left hand has six fingers (0:00, zoomed). B keeps anatomy correct, but the sign reads 'CAFFE' instead of 'CAFÉ'. Chose A because…"></textarea>
+      <div class="counter" id="count">0 characters (minimum 80)</div>
+      <div class="error" id="err"></div>
+      <div class="actions">
+        <button class="secondary" id="prev">Previous</button>
+        <button id="next">Save and next</button>
+        <button class="secondary" id="export">Export ratings.csv</button>
+      </div>
+    </div>
+  </div>
+</main>
+<script>
+const DIMENSIONS = ["adherence", "quality", "realism"];
+const ISSUES = ["distorted anatomy", "flicker / unnatural motion", "text errors", "audio-video mismatch", "missing prompt element", "artefacts", "unclear / unnatural speech"];
+const STORE_KEY = "ai-output-evaluator-v1";
+let pairs = [], media = {}, idx = 0, ratings = {};
+
+function load() { try { ratings = JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) { ratings = {}; } }
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(ratings)); } catch (e) {} }
+load();
+
+document.getElementById("pairsFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    pairs = Array.isArray(data) ? data : data.pairs;
+    if (!pairs || !pairs.length) throw new Error("No pairs found");
+    idx = 0; document.getElementById("intro").hidden = true; document.getElementById("task").hidden = false; render();
+  } catch (err) { alertBox("Could not read pairs file: " + err.message); }
+});
+document.getElementById("mediaFiles").addEventListener("change", e => {
+  for (const f of e.target.files) media[f.name] = URL.createObjectURL(f);
+  if (pairs.length) render();
+});
+
+function alertBox(msg) { document.getElementById("intro").textContent = msg; }
+
+function blankRating(p) {
+  const r = { pair_id: p.id, modality: p.modality || "", preferred: "", explanation: "", rated_at: "" };
+  for (const side of ["a", "b"]) {
+    for (const d of DIMENSIONS) r[`${side}_${d}`] = null;
+    r[`${side}_issues`] = [];
+  }
+  return r;
+}
+
+function mediaEl(src, modality) {
+  if (modality === "text") { const d = document.createElement("div"); d.className = "text-output"; d.textContent = src; return d; }
+  const url = media[src] || src;
+  if (modality === "video") { const v = document.createElement("video"); v.src = url; v.controls = true; v.loop = true; return v; }
+  if (modality === "audio") { const a = document.createElement("audio"); a.src = url; a.controls = true; return a; }
+  const img = document.createElement("img"); img.src = url; img.alt = "output"; return img;
+}
+
+function renderSide(card, side, p, r) {
+  card.innerHTML = "";
+  const h = document.createElement("h3"); h.textContent = "Output " + side.toUpperCase(); h.style.margin = "0 0 8px"; card.appendChild(h);
+  const box = document.createElement("div"); box.className = "media";
+  box.appendChild(mediaEl(p[side], p.modality || "image"));
+  box.addEventListener("click", ev => { if (ev.target.tagName === "IMG") box.classList.toggle("zoomed"); });
+  card.appendChild(box);
+  for (const d of DIMENSIONS) {
+    const l = document.createElement("label"); l.textContent = d[0].toUpperCase() + d.slice(1) + " (1–5)"; card.appendChild(l);
+    const s = document.createElement("div"); s.className = "scale";
+    for (let v = 1; v <= 5; v++) {
+      const b = document.createElement("button"); b.textContent = v; if (r[`${side}_${d}`] === v) b.className = "on";
+      b.onclick = () => { r[`${side}_${d}`] = v; save(); render(); };
+      s.appendChild(b);
+    }
+    card.appendChild(s);
+  }
+  const il = document.createElement("label"); il.textContent = "Issues spotted"; card.appendChild(il);
+  const iw = document.createElement("div"); iw.className = "issues";
+  for (const issue of ISSUES) {
+    const lab = document.createElement("label"); const cb = document.createElement("input"); cb.type = "checkbox";
+    cb.checked = r[`${side}_issues`].includes(issue);
+    cb.onchange = () => { const arr = r[`${side}_issues`]; if (cb.checked) arr.push(issue); else arr.splice(arr.indexOf(issue), 1); save(); };
+    lab.append(cb, issue); iw.appendChild(lab);
+  }
+  card.appendChild(iw);
+}
+
+function render() {
+  const p = pairs[idx];
+  const r = ratings[p.id] || (ratings[p.id] = blankRating(p));
+  document.getElementById("progress").textContent = `Pair ${idx + 1} of ${pairs.length} · ${Object.values(ratings).filter(x => x.rated_at).length} rated`;
+  document.getElementById("promptText").textContent = p.prompt;
+  renderSide(document.getElementById("cardA"), "a", p, r);
+  renderSide(document.getElementById("cardB"), "b", p, r);
+  const pref = document.getElementById("pref"); pref.innerHTML = "";
+  for (const [val, label] of [["a", "Output A"], ["b", "Output B"]]) {
+    const b = document.createElement("button"); b.textContent = label; if (r.preferred === val) b.className = "on";
+    b.onclick = () => { r.preferred = val; save(); render(); }; pref.appendChild(b);
+  }
+  const ta = document.getElementById("explanation"); ta.value = r.explanation;
+  ta.oninput = () => { r.explanation = ta.value; save(); updateCount(); };
+  updateCount(); document.getElementById("err").textContent = "";
+}
+function updateCount() { document.getElementById("count").textContent = document.getElementById("explanation").value.trim().length + " characters (minimum 80)"; }
+
+function validate(r) {
+  const missing = [];
+  for (const s of ["a", "b"]) for (const d of DIMENSIONS) if (!r[`${s}_${d}`]) missing.push(`${s.toUpperCase()} ${d}`);
+  if (!r.preferred) missing.push("preferred output");
+  if (r.explanation.trim().length < 80) missing.push("explanation of at least 80 characters");
+  return missing;
+}
+
+document.getElementById("next").onclick = () => {
+  const r = ratings[pairs[idx].id]; const missing = validate(r);
+  if (missing.length) { document.getElementById("err").textContent = "Still needed: " + missing.join(", "); return; }
+  r.rated_at = new Date().toISOString(); save();
+  if (idx < pairs.length - 1) { idx++; render(); } else { document.getElementById("err").textContent = "All pairs rated. Export your ratings."; render(); }
+};
+document.getElementById("prev").onclick = () => { if (idx > 0) { idx--; render(); } };
+
+function csvCell(v) { const s = Array.isArray(v) ? v.join("; ") : (v === null || v === undefined ? "" : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+document.getElementById("export").onclick = () => {
+  const cols = ["pair_id", "modality", ...["a", "b"].flatMap(s => [...DIMENSIONS.map(d => `${s}_${d}`), `${s}_issues`]), "preferred", "explanation", "rated_at"];
+  const rows = Object.values(ratings).filter(r => r.rated_at).map(r => cols.map(c => csvCell(r[c])).join(","));
+  const blob = new Blob([cols.join(",") + "\n" + rows.join("\n") + "\n"], { type: "text/csv" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "ratings.csv"; a.click();
+};
+</script>
+</body>
+</html>
